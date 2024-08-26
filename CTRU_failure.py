@@ -36,6 +36,25 @@ def build_rounding_law_ciphertext(ps):
                 epsilon += ps.q2              
             D[epsilon] = D.get(epsilon,0)+1./ps.q1 * 1./ps.p    
     return D  
+def build_rounding_law_rlwr_non_power_of_two_2(ps,k):
+    H = {}
+    for h in range(0, ps.q1):
+        H[h] = 1./ps.q1
+    R = ps.probability_distribution2
+    HR_each = law_product(H, R)
+    HR = iter_law_convolution_modulo_q(HR_each,k,ps.q1)
+    #HR = iter_law_convolution(HR_each, int(ps.n/2))
+    #HR = iter_law_convolution_modulo_q(HR_each, int(ps.n/2), ps.q1)
+    C = {}
+    for i in HR:
+        c = i % ps.q1
+        C[c] = C.get(c, 0) + HR[i]
+    D = {}
+    for c in C:    
+        temp = c - 1.*ps.q1/ps.q2*round(ps.q2/ps.q1*c)
+        epsilon = -ps.q2/ps.q1*temp
+        D[epsilon] = D.get(epsilon,0) + C[c] 
+    return D  
 def build_rounding_law_rlwr_non_power_of_two_3(ps):
     H = {}
     for h in range(0, ps.q1):
