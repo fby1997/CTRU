@@ -136,7 +136,7 @@ def satterthwaite_effective_degrees_of_freedom(variances, degrees_of_freedom):
     
 #CTRU (Half of the items are averaged, and half remain unchanged)
 def ErrorRate_CTRU_3Cyclo_Ring_Half(ps):  
-    sigma_epsilon = sqrt( var_of_law( build_rounding_law_rlwr(ps) ) )
+    sigma_epsilon = sqrt( var_of_law( build_rounding_law_rlwr_non_power_of_two_2(ps) ) )
     s1_list=[]
     for i in range(int(ps.n/2)-1):
         s1_list.append((14*ps.n/8)*(ps.sigma1**2*ps.sigma2**2))
