@@ -2,6 +2,7 @@ from scipy.stats import chi2
 from math import sqrt, log, ceil, erf
 from math import factorial as fac
 from proba_util import *
+import numpy as np
 
 def build_rounding_law_rlwr(ps):
     D = {}
@@ -112,4 +113,50 @@ def Bandwidth(ps):
     pk = ceil(ps.n*ceil(log(ps.q1,2))/8)
     ct = ceil(ps.n*ceil(log(ps.q2,2))/8)
     print('|pk| = %d, |ct| = %d, bandwidth = %d\n'%(pk, ct, (pk+ct)))
+
+def geometric_mean(data):
+    return exp(sum(log(x) for x in data) / len(data))
+
+def satterthwaite_effective_degrees_of_freedom(variances, degrees_of_freedom):
+    """
+    计算Satterthwaite近似下的有效自由度。
+    
+    参数:
+    variances (list of float): 各个分布的方差列表。
+    degrees_of_freedom (list of int): 各个分布的自由度列表。
+    
+    返回:
+    float: 近似卡方分布的有效自由度。
+    """
+    numerator = (np.sum(variances))**2
+    denominator = np.sum([(var**2) / df for var, df in zip(variances, degrees_of_freedom)])
+    nu_eff = numerator / denominator
+    
+    return nu_eff
+    
+#CTRU (Half of the items are averaged, and half remain unchanged)
+def ErrorRate_CTRU_3Cyclo_Ring_Half(ps):  
+    sigma_epsilon = sqrt( var_of_law( build_rounding_law_rlwr(ps) ) )
+    s1_list=[]
+    for i in range(int(ps.n/2)-1):
+        s1_list.append((14*ps.n/8)*(ps.sigma1**2*ps.sigma2**2))
+    for i in range(2):
+        s1_list.append(ps.n*ps.sigma1**2*ps.sigma2**2)
+    for i in range(int(ps.n/2)+1,ps.n):
+        s1_list.append((3*ps.n/2)*(ps.sigma1**2*ps.sigma2**2))
+    s2_list=[]
+    for i in range(int(ps.n/2)-1):
+        s2_list.append(4*(14*ps.n/8)*(ps.sigma1**2*sigma_epsilon**2))
+    for i in range(2):
+        s2_list.append(4*ps.n*ps.sigma1**2*sigma_epsilon**2)
+    for i in range(int(ps.n/2)+1,ps.n):
+        s2_list.append(4*(3*ps.n/2)*(ps.sigma1**2*sigma_epsilon**2))
+    s_list=[]
+    for i in range(0,ps.n,8):
+        s_list.append(sqrt(geometric_mean(s1_list[i:i+8])+(ps.q1/ps.q2)**2*geometric_mean(s2_list[i:i+8])))
+    pr_list=[]
+    for i in range(0,int(ps.n/8)):
+        pr_list.append(chi2.logsf( (ps.threshold/s_list[i])**2, 8 ) / log(2))
+    print("err rate: \n")
+    print(log(np.sum([2**x for x in pr_list]),2))
     
