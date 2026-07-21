@@ -2,26 +2,19 @@ from math import factorial as fac
 from math import log, ceil, erf, sqrt
 
 
-''' Centered binomial distribution, parameter eta = 1 '''
-def build_cbd1_law():
-    D = build_centered_binomial_law(1)
+''' uniform {-k,...,0,...,k} '''
+def build_uniform_law(k):
+    D = {}
+    for i in range(-k, k+1):
+        D[i] = 1./(2*k+1)
     return D
 
-def build_cbd2_law():
-    D = build_centered_binomial_law(2)
-    return D
-
-def build_cbd3_law():
-    D = build_centered_binomial_law(3)
-    return D
-
-''' Centered binomial distribution, parameter eta = 4 '''
-def build_cbd4_law():
-    D = build_centered_binomial_law(4)
-    return D
-
-def build_cbd5_law():
-    D = build_centered_binomial_law(5)
+''' CBD2 mod 3'''
+def build_cbd2_bar_law():
+    D = {}
+    D[0] = 6./16
+    D[1] = 5./16
+    D[-1] = 5./16 
     return D
 
 ''' Calculate the variance of distribution D '''
@@ -180,6 +173,32 @@ def iter_law_convolution(A, i):
         D = clean_dist(D)
         if ch == '1':
             D = law_convolution(D, A)
+            D = clean_dist(D)
+    return D
+
+
+def law_modulo_q(A, q):
+    D = {}
+    for a in A:
+        d = a % q
+        D[d] = D.get(d, 0) + A[a]   
+    return D
+ 
+    
+def iter_law_convolution_modulo_q(A, i, q):
+    """ compute the -ith forld convolution of a distribution (using double-and-add)
+    :param A: first input law (dictionnary)
+    :param i: (integer)
+    """
+    D = {0: 1.0}
+    i_bin = bin(i)[2:]  # binary representation of n
+    for ch in i_bin:
+        D = law_convolution(D, D)
+        D = law_modulo_q(D, q)
+        D = clean_dist(D)
+        if ch == '1':
+            D = law_convolution(D, A)
+            D = law_modulo_q(D, q)
             D = clean_dist(D)
     return D
 
