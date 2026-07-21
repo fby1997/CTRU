@@ -79,6 +79,7 @@ def main():
     for name, ps, distribution_name in ctru_parameter_sets:
         print_parameters(name, ps, distribution_name)
         Bandwidth(ps)
+        summarize_security(ps)
         ErrorRate(ps)
 
     print("\n======== CTRU-Light Parameter Set ========")
