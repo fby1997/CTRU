@@ -41,7 +41,7 @@ def build_rounding_law_rlwr_non_power_of_two_2(ps,k):
     H = {}
     for h in range(0, ps.q1):
         H[h] = 1./ps.q1
-    R = ps.probability_distribution2
+    R = ps.probability_distribution2()
     HR_each = law_product(H, R)
     HR = iter_law_convolution_modulo_q(HR_each,k,ps.q1)
     #HR = iter_law_convolution(HR_each, int(ps.n/2))
@@ -60,7 +60,7 @@ def build_rounding_law_rlwr_non_power_of_two_3(ps):
     H = {}
     for h in range(0, ps.q1):
         H[h] = 1./ps.q1
-    R = ps.probability_distribution2
+    R = ps.probability_distribution2()
     HR_each = law_product_over_non_power_of_2(H, R);
     #HR = iter_law_convolution(HR_each, int(ps.n/2))
     HR = iter_law_convolution_modulo_q(HR_each, int(ps.n*2.75/6), ps.q1)
