@@ -1,4 +1,9 @@
-# CTRU
-security, failure probability, and quantum gates estimator
+# CTRU error-rate test
 
-The quantum gates estimator relies on the scripts available at [leaky-LWE](https://github.com/lducas/leaky-LWE-Estimator/tree/NIST-round3)
+Run:
+
+```powershell
+python CTRU.py
+```
+
+The entry point tests CTRU, CTRU-Light, and CTRU-Prime with one `CTRU_ParameterSet` interface.  The reported `log2(delta)` values are printed for each parameter set.
