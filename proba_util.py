@@ -9,6 +9,28 @@ def build_uniform_law(k):
         D[i] = 1./(2*k+1)
     return D
 
+''' Centered binomial distribution, parameter eta = 1 '''
+def build_cbd1_law():
+    D = build_centered_binomial_law(1)
+    return D
+
+def build_cbd2_law():
+    D = build_centered_binomial_law(2)
+    return D
+
+def build_cbd3_law():
+    D = build_centered_binomial_law(3)
+    return D
+
+''' Centered binomial distribution, parameter eta = 4 '''
+def build_cbd4_law():
+    D = build_centered_binomial_law(4)
+    return D
+
+def build_cbd5_law():
+    D = build_centered_binomial_law(5)
+    return D
+
 ''' CBD2 mod 3'''
 def build_cbd2_bar_law():
     D = {}
