@@ -1,162 +1,249 @@
+"""Failure-probability estimators for CTRU, CTRU-Light, and CTRU-Prime."""
+
+from math import ceil, exp, log, pi, sqrt
 from scipy.stats import chi2
-from math import sqrt, log, ceil, erf
-from math import factorial as fac
-from proba_util import *
-import numpy as np
+from proba_util import build_centered_binomial_law, var_of_law
+
+
+def build_uniform_law(k):
+    return {value: 1.0 / (2 * k + 1) for value in range(-k, k + 1)}
+
+
+def build_cbd1_law():
+    return build_centered_binomial_law(1)
+
+
+def build_cbd2_law():
+    return build_centered_binomial_law(2)
+
+
+def build_cbd3_law():
+    return build_centered_binomial_law(3)
+
+
+def build_cbd4_law():
+    return build_centered_binomial_law(4)
+
+
+def build_cbd5_law():
+    return build_centered_binomial_law(5)
+
+
+def geometric_mean(values):
+    return exp(sum(log(value) for value in values) / len(values))
+
+
+def log2_sum(log_values):
+    maximum = max(log_values)
+    return maximum + log(
+        sum(2 ** (value - maximum) for value in log_values), 2
+    )
+
+
+def e8_volume_threshold_factor():
+    return (384 / pi**4) ** (1 / 64)
+
+
+def block_tail_log2(variances, threshold, method):
+    """Approximate an eight-dimensional weighted Gaussian tail."""
+    if method == "geometric":
+        effective_variance = geometric_mean(variances)
+        return chi2.logsf(threshold**2 / effective_variance, 8) / log(2)
+
+    if method == "satterthwaite":
+        variance_sum = sum(variances)
+        variance_square_sum = sum(value**2 for value in variances)
+        scale = variance_square_sum / variance_sum
+        degrees_of_freedom = variance_sum**2 / variance_square_sum
+        return chi2.logsf(
+            threshold**2 / scale, degrees_of_freedom
+        ) / log(2)
+
+    raise ValueError(
+        "block_variance_method must be 'geometric' or 'satterthwaite'"
+    )
+
 
 def build_rounding_law_rlwr(ps):
-    D = {}
-    for u in range(0, ps.q1):    
-        temp = u - 1.*ps.q1/ps.q2*round(ps.q2/ps.q1*u)
-        epsilon = -ps.q2/ps.q1*temp
-        D[epsilon] = D.get(epsilon,0)+1./ps.q1 
-    return D  
+    distribution = {}
+    for u in range(ps.q1):
+        temp = u - ps.q1 / ps.q2 * round(ps.q2 / ps.q1 * u)
+        epsilon = -ps.q2 / ps.q1 * temp
+        distribution[epsilon] = distribution.get(epsilon, 0) + 1.0 / ps.q1
+    return distribution
 
-def build_rounding_law_message(ps):
-    D = {}
-    for k1 in range(0, ps.p):    
-        temp = ps.q1/ps.p*k1
-        epsilon = round( temp ) - temp
-        D[epsilon] = D.get(epsilon,0)+1./ps.p    
-    return D   
-        
 
-def build_rounding_law_ciphertext(ps):
-    D = {}
-    for sigma1 in range(0, ps.q1):
-        for k1 in range(0, ps.p):    
-            temp = 1.*ps.q2/ps.q1*( sigma1 + round(ps.q1/ps.p*k1))
-            if temp >= ps.q2:
-                temp -= ps.q2
-            if temp <= -ps.q2:
-                temp += ps.q2                
-            epsilon = round( temp ) - temp
-            if epsilon >= ps.q2/2:
-                epsilon -= ps.q2
-            if epsilon <= -ps.q2/2:
-                epsilon += ps.q2              
-            D[epsilon] = D.get(epsilon,0)+1./ps.q1 * 1./ps.p    
-    return D  
-def build_rounding_law_rlwr_non_power_of_two_2(ps,k):
-    H = {}
-    for h in range(0, ps.q1):
-        H[h] = 1./ps.q1
-    R = ps.probability_distribution2()
-    HR_each = law_product(H, R)
-    HR = iter_law_convolution_modulo_q(HR_each,k,ps.q1)
-    #HR = iter_law_convolution(HR_each, int(ps.n/2))
-    #HR = iter_law_convolution_modulo_q(HR_each, int(ps.n/2), ps.q1)
-    C = {}
-    for i in HR:
-        c = i % ps.q1
-        C[c] = C.get(c, 0) + HR[i]
-    D = {}
-    for c in C:    
-        temp = c - 1.*ps.q1/ps.q2*round(ps.q2/ps.q1*c)
-        epsilon = -ps.q2/ps.q1*temp
-        D[epsilon] = D.get(epsilon,0) + C[c] 
-    return D  
-def build_rounding_law_rlwr_non_power_of_two_3(ps):
-    H = {}
-    for h in range(0, ps.q1):
-        H[h] = 1./ps.q1
-    R = ps.probability_distribution2()
-    HR_each = law_product_over_non_power_of_2(H, R);
-    #HR = iter_law_convolution(HR_each, int(ps.n/2))
-    HR = iter_law_convolution_modulo_q(HR_each, int(ps.n*2.75/6), ps.q1)
-    C = {}
-    for i in HR:
-        c = i % ps.q1
-        C[c] = C.get(c, 0) + HR[i]
-    D = {}
-    for c in C:    
-        temp = c - 1.*ps.q1/ps.q2*round(ps.q2/ps.q1*c)
-        epsilon = -ps.q2/ps.q1*temp
-        D[epsilon] = D.get(epsilon,0) + C[c] 
-    return D 
-# CTRU-Prime
-def ErrorRate_Prime(ps):
-    sigma_epsilon = sqrt( var_of_law( build_rounding_law_rlwr_non_power_of_two_3(ps) ) )    
-    s1 = int(ps.n*2.75/6)*(ps.sigma1**2 * ps.sigma2**2 + ps.sigma2**2 * (ps.sigma1**2+ps.sigma1**2) ) 
-    temp = (ps.q1/ps.q2*sigma_epsilon)**2
-    s2 = int(ps.n*2.75/6)*(ps.p**2)*(temp * ps.sigma1**2 + temp * (ps.sigma1**2+ps.sigma1**2) ) 
-    s3 = (ps.q1/ps.q2*sigma_epsilon)**2  
-    s = sqrt(s1 + s2 + s3)
-    pr = chi2.logsf( (ps.threshold/s)**2, 8 ) / log(2) + log(ps.n/8, 2)
-    print("err:")
-    print("    = 2^%.2f"% pr)
-# CTRU
-def ErrorRate(ps):
-    sigma_epsilon_1 = sqrt( var_of_law( build_rounding_law_rlwr_non_power_of_two_2(ps,int(ps.n*5/4) ) ))    
-    s1_1 = ps.n/2*(ps.sigma1**2 * ps.sigma2**2 + ps.sigma2**2 * (ps.sigma1**2+ps.sigma1**2) ) 
-    temp_1 = (ps.q1/ps.q2*sigma_epsilon_1)**2
-    s2_1 = ps.n/2*(ps.p**2)*(temp_1 * ps.sigma1**2 + temp_1 * (ps.sigma1**2+ps.sigma1**2) ) 
-    s3_1 = (ps.q1/ps.q2*sigma_epsilon_1)**2  
-    s_1 = sqrt(s1_1 + s2_1 + s3_1)
-    pr_1 = chi2.logsf( (ps.threshold/s_1)**2, 8 ) / log(2) + log(ps.n/16, 2)
+def ErrorRate_CTRU_3Cyclo_Ring(
+    ps,
+    use_e8_volume_factor=False,
+    block_variance_method="geometric",
+):
+    """Error rate for CTRU over Z[x]/(x^n-x^(n/2)+1)."""
+    sigma_epsilon = sqrt(var_of_law(build_rounding_law_rlwr(ps)))
 
-    sigma_epsilon_2 = sqrt( var_of_law( build_rounding_law_rlwr_non_power_of_two_2(ps,int(ps.n*3/2) ) ))    
-    s1_2 = ps.n/2*(ps.sigma1**2 * ps.sigma2**2 + ps.sigma2**2 * (ps.sigma1**2+ps.sigma1**2) ) 
-    temp_2 = (ps.q1/ps.q2*sigma_epsilon_2)**2
-    s2_2 = ps.n/2*(ps.p**2)*(temp_2 * ps.sigma1**2 + temp_2 * (ps.sigma1**2+ps.sigma1**2) ) 
-    s3_2 = (ps.q1/ps.q2*sigma_epsilon_2)**2  
-    s_2 = sqrt(s1_2 + s2_2 + s3_2)
-    pr_2 = chi2.logsf( (ps.threshold/s_2)**2, 8 ) / log(2) + log(ps.n/16, 2)
-    
-    pr = log(2**(pr_1)+2**(pr_2),2)
-    
-    print("err:")
-    print("    = 2^%.2f"% pr)
+    s1_list = []
+    for i in range(int(ps.n / 2) - 1):
+        count = 3 * ps.n / 2 - i - 1
+        s1_list.append(count * ps.sigma1**2 * ps.sigma2**2)
+    for _ in range(2):
+        s1_list.append(ps.n * ps.sigma1**2 * ps.sigma2**2)
+    for _ in range(int(ps.n / 2) + 1, ps.n):
+        s1_list.append(3 * ps.n / 2 * ps.sigma1**2 * ps.sigma2**2)
+
+    s2_list = []
+    for i in range(int(ps.n / 2) - 1):
+        count = 3 * ps.n / 2 - i - 1
+        s2_list.append(4 * count * ps.sigma1**2 * sigma_epsilon**2)
+    for _ in range(2):
+        s2_list.append(4 * ps.n * ps.sigma1**2 * sigma_epsilon**2)
+    for _ in range(int(ps.n / 2) + 1, ps.n):
+        s2_list.append(
+            4 * (3 * ps.n / 2) * ps.sigma1**2 * sigma_epsilon**2
+        )
+
+    variance_list = [
+        variance_gr
+        + (ps.q1 / ps.q2) ** 2 * variance_epsilon_f
+        for variance_gr, variance_epsilon_f in zip(s1_list, s2_list)
+    ]
+
+    threshold = ps.threshold
+    if use_e8_volume_factor:
+        threshold *= e8_volume_threshold_factor()
+
+    block_logs = []
+    for start in range(0, ps.n, 8):
+        block_logs.append(
+            block_tail_log2(
+                variance_list[start : start + 8],
+                threshold,
+                block_variance_method,
+            )
+        )
+
+    result = log2_sum(block_logs)
+    print(f"err rate: 2^({result:.2f})")
+    return result
+
+
+# Compatibility with the name used in the supplied formula.
+ErrorRate_CTRU_3Cyclo_Ring_2 = ErrorRate_CTRU_3Cyclo_Ring
+
+
+def build_rounding_law_rlwr_1(ps):
+    distribution = {}
+    for u in range(ps.q1):
+        base_term = ps.q2 / ps.q1 * u
+        epsilon = round(base_term) - base_term
+        distribution[epsilon] = distribution.get(epsilon, 0) + 1.0 / ps.q1
+    return distribution
+
+
+def build_rounding_law_rlwr_2(ps):
+    lower = ceil(-ps.q1 / (2 * ps.q2))
+    upper = ceil(ps.q1 / (2 * ps.q2))
+    length = upper - lower
+    distribution = {}
+    for u in range(lower, upper):
+        epsilon = -ps.q2 / ps.q1 * u
+        distribution[epsilon] = distribution.get(epsilon, 0) + 1.0 / length
+    return distribution
+
+
+def _ctru_light_standard_deviation(ps, include_message_term=False):
+    sigma_epsilon_1 = sqrt(var_of_law(build_rounding_law_rlwr_1(ps)))
+    sigma_epsilon_2 = sqrt(var_of_law(build_rounding_law_rlwr_2(ps)))
+
+    variance_gr = ps.n * ps.sigma1**2 * ps.sigma2**2
+    variance_epsilon_1_f = 2 * ps.n * ps.sigma1**2 * sigma_epsilon_1**2
+    variance = (
+        variance_gr
+        + (ps.q1 / ps.q2) ** 2
+        * (variance_epsilon_1_f + sigma_epsilon_1**2)
+        + 4 * ps.n * ps.sigma1**2 * sigma_epsilon_2**2
+        + sigma_epsilon_2**2
+    )
+    if include_message_term:
+        variance += 1.0 / 8
+    return sqrt(variance)
+
+
+def _ctru_light_error_rate(ps, threshold, include_message_term):
+    standard_deviation = _ctru_light_standard_deviation(
+        ps, include_message_term=include_message_term
+    )
+    block_log = chi2.logsf(
+        (threshold / standard_deviation) ** 2, 8
+    ) / log(2)
+    result = log(ps.n / 16, 2) + block_log
+    print(f"err rate: 2^({result:.2f})")
+    return result
+
+
+def ErrorRate_CTRU_Light_v1(ps):
+    return _ctru_light_error_rate(
+        ps, threshold=ps.threshold, include_message_term=False
+    )
+
+
+def ErrorRate_CTRU_Light_v2(ps):
+    return _ctru_light_error_rate(
+        ps, threshold=ps.threshold3, include_message_term=True
+    )
+
+
+def ErrorRate_CTRU_Light_v3(ps):
+    return _ctru_light_error_rate(
+        ps, threshold=ps.threshold2, include_message_term=True
+    )
+
+
+# Default CTRU-Light estimator requested for this package.
+ErrorRate_CTRU_Light = ErrorRate_CTRU_Light_v1
+
+
+def _prime_term_counts(n):
+    counts = [n]
+    counts.extend(2 * n - k for k in range(1, n - 1))
+    counts.append(n + 1)
+    return counts
+
+
+def ErrorRate_CTRU_Prime_Field(
+    ps,
+    use_e8_volume_factor=True,
+    block_variance_method="geometric",
+):
+    """CTRU-Prime estimator"""
+    sigma_epsilon2 = var_of_law(build_rounding_law_rlwr(ps))
+    variance_list = []
+    for count in _prime_term_counts(ps.n):
+        variance_gr = count * ps.sigma1**2 * ps.sigma2**2
+        variance_epsilon_f = 8 * count * ps.sigma1**2 * sigma_epsilon2
+        variance_list.append(
+            variance_gr + (ps.q1 / ps.q2) ** 2 * variance_epsilon_f
+        )
+
+    threshold = ps.threshold
+    if use_e8_volume_factor:
+        threshold *= e8_volume_threshold_factor()
+
+    block_logs = []
+    for start in range(0, ps.n, 8):
+        block = variance_list[start : start + 8]
+        block_logs.append(
+            block_tail_log2(block, threshold, block_variance_method)
+        )
+
+    result = log2_sum(block_logs) + log(8, 2)
+    print(f"err rate: 2^({result:.2f})")
+    return result
 
 
 def Bandwidth(ps):
-    pk = ceil(ps.n*ceil(log(ps.q1,2))/8)
-    ct = ceil(ps.n*ceil(log(ps.q2,2))/8)
-    print('|pk| = %d, |ct| = %d, bandwidth = %d\n'%(pk, ct, (pk+ct)))
-
-def geometric_mean(data):
-    return exp(sum(log(x) for x in data) / len(data))
-
-def satterthwaite_effective_degrees_of_freedom(variances, degrees_of_freedom):
-    """
-    计算Satterthwaite近似下的有效自由度。
-    
-    参数:
-    variances (list of float): 各个分布的方差列表。
-    degrees_of_freedom (list of int): 各个分布的自由度列表。
-    
-    返回:
-    float: 近似卡方分布的有效自由度。
-    """
-    numerator = (np.sum(variances))**2
-    denominator = np.sum([(var**2) / df for var, df in zip(variances, degrees_of_freedom)])
-    nu_eff = numerator / denominator
-    
-    return nu_eff
-    
-#CTRU (Half of the items are averaged, and half remain unchanged)
-def ErrorRate_CTRU_3Cyclo_Ring_Half(ps):  
-    sigma_epsilon = sqrt( var_of_law( build_rounding_law_rlwr_non_power_of_two_2(ps) ) )
-    s1_list=[]
-    for i in range(int(ps.n/2)-1):
-        s1_list.append((14*ps.n/8)*(ps.sigma1**2*ps.sigma2**2))
-    for i in range(2):
-        s1_list.append(ps.n*ps.sigma1**2*ps.sigma2**2)
-    for i in range(int(ps.n/2)+1,ps.n):
-        s1_list.append((3*ps.n/2)*(ps.sigma1**2*ps.sigma2**2))
-    s2_list=[]
-    for i in range(int(ps.n/2)-1):
-        s2_list.append(4*(14*ps.n/8)*(ps.sigma1**2*sigma_epsilon**2))
-    for i in range(2):
-        s2_list.append(4*ps.n*ps.sigma1**2*sigma_epsilon**2)
-    for i in range(int(ps.n/2)+1,ps.n):
-        s2_list.append(4*(3*ps.n/2)*(ps.sigma1**2*sigma_epsilon**2))
-    s_list=[]
-    for i in range(0,ps.n,8):
-        s_list.append(sqrt(geometric_mean(s1_list[i:i+8])+(ps.q1/ps.q2)**2*geometric_mean(s2_list[i:i+8])))
-    pr_list=[]
-    for i in range(0,int(ps.n/8)):
-        pr_list.append(chi2.logsf( (ps.threshold/s_list[i])**2, 8 ) / log(2))
-    print("err rate: \n")
-    print(log(np.sum([2**x for x in pr_list]),2))
-    
+    public_key = ceil(ps.n * ceil(log(ps.q1, 2)) / 8)
+    ciphertext = ceil(ps.n * ceil(log(ps.q2, 2)) / 8)
+    print(
+        f"|pk| = {public_key}, |ct| = {ciphertext}, "
+        f"bandwidth = {public_key + ciphertext}"
+    )
